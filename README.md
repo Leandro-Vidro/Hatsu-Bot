@@ -64,8 +64,8 @@ O prefixo padrão do bot é `h!`.
 
 ### 1. Clonar o repositório
 ```bash
-git clone https://github.com/seu-usuario/hatsu-bot.git
-cd hatsu-bot
+git clone https://github.com/Leandro-Vidro/Hatsu-Bot.git
+cd Hatsu-Bot
 ```
 
 ### 2. Criar e ativar o ambiente virtual (Recomendado)
