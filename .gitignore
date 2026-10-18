@@ -1,0 +1,31 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Tokens, chaves e credenciais de API (NUNCA enviar ao GitHub)
+tokens.json
+tokend.json
+token.json
+credentials.json
+.env
+
+# Arquivos de estado local e sessões de torneio
+SetedTorneio.json
+SetedRodada.json
+*.db
+*.sqlite
+*.sqlite3
+
+# Ambientes virtuais
+venv/
+.venv/
+env/
+ENV/
+
+# IDEs e editores de código
+.vscode/
+.idea/
+
+# Pasta de testes, rascunhos e históricos locais
+testes/
