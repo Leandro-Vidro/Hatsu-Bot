@@ -6,6 +6,7 @@ import discord
 
 endpoint_chat = "https://tenhou.net/cs/edit/cmd_chat.cgi"
 endpoint_start = "https://tenhou.net/cs/edit/cmd_start.cgi"
+endpoint_get_players = "https://tenhou.net/cs/edit/cmd_get_players.cgi"
 
 def filtro(lista):
     return lista != ['OK']
@@ -43,6 +44,32 @@ def decodeString(r):
     string5 = list(filter(None, string4))
     return string5
 
+def parse_players(raw):
+    """Decodifica e separa jogadores em IDLE (no lobby) e PLAY (em partida)."""
+    if isinstance(raw, bytes):
+        raw = raw.decode('utf-8', errors='ignore')
+    text = urllib.parse.unquote(str(raw))
+    data = {'IDLE': [], 'PLAY': []}
+    for part in text.split('&'):
+        if part.startswith('IDLE='):
+            data['IDLE'] = [n.strip() for n in part[len('IDLE='):].split(',') if n.strip()]
+        elif part.startswith('PLAY='):
+            data['PLAY'] = [n.strip() for n in part[len('PLAY='):].split(',') if n.strip()]
+    return data
+
+async def get_players(id_torneio, session=None):
+    """Pega jogadores online e jogando no lobby"""
+    data_chat = f'L={id_torneio}'
+    header = create_header(len(data_chat), id_torneio)
+
+    if session is None:
+        async with aiohttp.ClientSession() as own_session:
+            async with own_session.post(endpoint_get_players, headers=header, data=data_chat) as response:
+                return await response.content.read()
+    else:
+        async with session.post(endpoint_get_players, headers=header, data=data_chat) as response:
+            return await response.content.read()
+
 async def send_chat(id_torneio, color, chat, session=None):
     """Envia uma mensagem de chat para o lobby do Tenhou."""
     data_chat = f'L={id_torneio}&COLOR={color}&HIDDEN=0&CSLOG=0&CHAT={chat}'
@@ -62,7 +89,7 @@ async def start_game(id_torneio, playersD, v_random, session=None):
         random.shuffle(playersD)
 
     TO = f'{playersD[0]}%0A{playersD[1]}%0A{playersD[2]}%0A{playersD[3]}'
-    data_start = f'L={id_torneio}&R2=000b&M={TO}&RND=default&WG=1&PW='
+    data_start = f'L={id_torneio}&R2=0003&M={TO}&RND=default&WG=1&PW='
     header = create_header(len(data_start), id_torneio)
 
     async def _execute(s):

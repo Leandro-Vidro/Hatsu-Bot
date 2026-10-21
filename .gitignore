@@ -29,3 +29,9 @@ ENV/
 
 # Pasta de testes, rascunhos e históricos locais
 testes/
+
+# Arquivos compactados
+*.zip
+*.rar
+*.tar.gz
+*.7z

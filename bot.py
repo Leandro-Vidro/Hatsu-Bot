@@ -4,7 +4,7 @@ import json
 import os
 import database as db
 from torneio import doc, GetPLayerListBySheet
-from StartTenhou import start_torneio, filtro
+from StartTenhou import start_torneio, filtro, get_players, parse_players
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -183,16 +183,57 @@ async def StartBySheet(ctx, arg1, arg2, arg3 = None):
         await ctx.reply(chat)
         r = await start_torneio(arg1, playerlist, int(arg2), v, ctx)
         r = list(filter(filtro, r))
-        mnf = ''
-        for mesa in r:
-            for player in mesa:
-                if player != 'MEMBER NOT FOUND':
-                    mnf = mnf + '\n' + player
-        chat_discord = 'Jogadores fora do Lobby:'+mnf
-        if mnf != '':
+
+        jogadores_fora = []
+        if r:
+            jogando = set()
+            try:
+                raw_players = await get_players(arg1)
+                parsed = parse_players(raw_players)
+                jogando = {p.strip().lower() for p in parsed.get('PLAY', []) if p.strip()}
+            except Exception as e:
+                print(f"Erro ao consultar jogadores no Tenhou: {e}")
+
+            for mesa in r:
+                for player in mesa:
+                    player_clean = player.strip()
+                    if player_clean and player_clean != 'MEMBER NOT FOUND':
+                        # Se o jogador já está em partida (PLAY=), ignora para não poluir
+                        if player_clean.lower() not in jogando:
+                            if player_clean not in jogadores_fora:
+                                jogadores_fora.append(player_clean)
+
+        if jogadores_fora:
+            chat_discord = 'Jogadores fora do Lobby:\n' + '\n'.join(jogadores_fora)
             await ctx.send(chat_discord)
-        else: await ctx.message.add_reaction("✅")
+        else:
+            await ctx.message.add_reaction("✅")
     else: await ctx.reply('Tempo inválido!')
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def GetPlayers(ctx, id_torneio: str):
+    """Mostra os jogadores online no lobby (IDLE) e os que estão em partida (PLAY)."""
+    try:
+        raw = await get_players(id_torneio)
+        data = parse_players(raw)
+        idle = data.get('IDLE', [])
+        play = data.get('PLAY', [])
+
+        texto = f"**Status do Lobby `{id_torneio}`:**\n"
+        if idle:
+            texto += f"**No Lobby (IDLE - {len(idle)}):**\n" + ", ".join(idle) + "\n"
+        else:
+            texto += "**No Lobby (IDLE):** Nenhum jogador\n"
+
+        if play:
+            texto += f"\n**Em Partida (PLAY - {len(play)}):**\n" + ", ".join(play) + "\n"
+        else:
+            texto += "\n**Em Partida (PLAY):** Nenhum jogador em partida\n"
+
+        await ctx.reply(texto)
+    except Exception as e:
+        await ctx.reply(f"Erro ao consultar jogadores do lobby: {e}")
 
 @bot.command()
 @commands.has_permissions(administrator=True)
