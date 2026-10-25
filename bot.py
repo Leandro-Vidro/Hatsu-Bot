@@ -111,6 +111,34 @@ async def GetLog(ctx, arg1):
     else:
         await ctx.reply("Argumento inválido. Use 'on' ou 'off'.")
 
+async def filtrar_jogadores_fora(id_torneio: str, mesas_com_erro: list) -> list[str]:
+    """
+    Filtra jogadores retornados com erro ('MEMBER NOT FOUND').
+    Descarta qualquer jogador que já esteja no lobby ('IDLE') ou em partida ('PLAY').
+    Retorna apenas quem realmente está ausente/fora do lobby e não está jogando.
+    """
+    presentes = set()
+    try:
+        raw_players = await get_players(id_torneio)
+        parsed = parse_players(raw_players)
+        idle = {p.strip().lower() for p in parsed.get('IDLE', []) if p.strip()}
+        play = {p.strip().lower() for p in parsed.get('PLAY', []) if p.strip()}
+        presentes = idle.union(play)
+    except Exception as e:
+        print(f"Erro ao consultar jogadores no Tenhou: {e}")
+
+    jogadores_fora = []
+    for mesa in mesas_com_erro:
+        for player in mesa:
+            player_clean = player.strip()
+            if player_clean and player_clean != 'MEMBER NOT FOUND':
+                # Só inclui se NÃO estiver no lobby (IDLE) e NÃO estiver jogando (PLAY)
+                if player_clean.lower() not in presentes:
+                    if player_clean not in jogadores_fora:
+                        jogadores_fora.append(player_clean)
+
+    return jogadores_fora
+
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def StartMatch(ctx, arg1, arg2, arg3, arg4 = None):
@@ -137,15 +165,16 @@ async def StartMatch(ctx, arg1, arg2, arg3, arg4 = None):
         await ctx.reply(chat)
         r = await start_torneio(arg2, playerlist, int(arg3), v, ctx)
         r = list(filter(filtro, r))
-        mnf = ''
-        for mesa in r:
-            for player in mesa:
-                if player != 'MEMBER NOT FOUND':
-                    mnf = mnf + '\n' + player
-        chat_discord = 'Jogadores fora do Lobby:'+mnf
-        if mnf != '':
+        
+        jogadores_fora = []
+        if r:
+            jogadores_fora = await filtrar_jogadores_fora(arg2, r)
+
+        if jogadores_fora:
+            chat_discord = 'Jogadores fora do Lobby:\n' + '\n'.join(jogadores_fora)
             await ctx.send(chat_discord)
-        else: await ctx.message.add_reaction("✅")
+        else:
+            await ctx.message.add_reaction("✅")
     else: await ctx.reply('Tempo inválido!')
 
 @bot.command()
@@ -186,22 +215,7 @@ async def StartBySheet(ctx, arg1, arg2, arg3 = None):
 
         jogadores_fora = []
         if r:
-            jogando = set()
-            try:
-                raw_players = await get_players(arg1)
-                parsed = parse_players(raw_players)
-                jogando = {p.strip().lower() for p in parsed.get('PLAY', []) if p.strip()}
-            except Exception as e:
-                print(f"Erro ao consultar jogadores no Tenhou: {e}")
-
-            for mesa in r:
-                for player in mesa:
-                    player_clean = player.strip()
-                    if player_clean and player_clean != 'MEMBER NOT FOUND':
-                        # Se o jogador já está em partida (PLAY=), ignora para não poluir
-                        if player_clean.lower() not in jogando:
-                            if player_clean not in jogadores_fora:
-                                jogadores_fora.append(player_clean)
+            jogadores_fora = await filtrar_jogadores_fora(arg1, r)
 
         if jogadores_fora:
             chat_discord = 'Jogadores fora do Lobby:\n' + '\n'.join(jogadores_fora)
