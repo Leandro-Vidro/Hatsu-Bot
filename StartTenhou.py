@@ -89,7 +89,7 @@ async def start_game(id_torneio, playersD, v_random, session=None):
         random.shuffle(playersD)
 
     TO = f'{playersD[0]}%0A{playersD[1]}%0A{playersD[2]}%0A{playersD[3]}'
-    data_start = f'L={id_torneio}&R2=0003&M={TO}&RND=default&WG=1&PW='
+    data_start = f'L={id_torneio}&R2=000b&M={TO}&RND=default&WG=1&PW='
     header = create_header(len(data_start), id_torneio)
 
     async def _execute(s):
