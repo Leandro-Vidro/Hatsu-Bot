@@ -212,7 +212,7 @@ def formatacao_link_log(mesas, resultados, logs, fase, numero, sheet=None, plani
     # 3. Localiza dinamicamente a célula pelo texto existente na aba Partidas
     range_celula = None
     if sheet is not None and planilha_id:
-        range_celula = _find_cell_by_text(sheet, planilha_id, 'Partidas!M1:Z35', texto_alvo)
+        range_celula = _find_cell_by_text(sheet, planilha_id, 'Partidas!M1:Z60', texto_alvo)
 
     # Fallback se a busca dinâmica não encontrar
     if not range_celula:
@@ -331,7 +331,7 @@ def doc(logs, planilha_id=None, fase=None, numero=None, guild_id="default"):
         return -2
 
     players = result(logs)
-    range_planilha = f'{fase}!A4:T50'
+    range_planilha = f'{fase}!A4:T'
 
     creds = CreateService()
 
@@ -377,7 +377,7 @@ def GetPLayerListBySheet(planilha_id=None, fase=None, numero=None, guild_id="def
     tabela = None
 
     if fase == 'Classificatória':
-        range_planilha = 'Partidas!A4:K50'
+        range_planilha = 'Partidas!A4:K100'
         try:
             service = build("sheets", "v4", credentials=creds)
             sheet = service.spreadsheets()
@@ -421,30 +421,55 @@ def GetPLayerListBySheet(planilha_id=None, fase=None, numero=None, guild_id="def
             print(err)
             return -2
 
-    elif fase == "Semifinais" or fase == "Final":
-        range_planilha = f'{fase}!A1:M'
+    elif fase in ("Semifinais", "Final"):
+        # Lê apenas colunas A e B para ignorar qualquer poluição nas colunas laterais (C até Z)
+        range_planilha = f'{fase}!A1:B100'
         service = build("sheets", "v4", credentials=creds)
         sheet = service.spreadsheets()
         try:
             r = sheet.values().get(spreadsheetId=planilha_id, range=range_planilha).execute()
             tabela = r.get('values', [])
-            tabela = list(filter(None, tabela))
 
             mesas = []
+            mesa_atual = None
+            players_atual = []
 
-            for i, coluna in enumerate(tabela):
-                if len(coluna) > 0 and ('Mesa' in coluna[0] or 'Final' in coluna[0]):
-                    players = []
-                    for e in range(2, 6):
-                        if i + e < len(tabela) and len(tabela[i+e]) > 1 and tabela[i+e][1] != '-':
-                            players.append(tabela[i+e][1])
-                    if players:
-                        if fase == 'Final':
-                            mesas.append(Mesa(players, nome="Final", numero=1))
-                        else:
-                            match = re.search(r'Mesa\s+([A-Za-z0-9]+)', coluna[0])
-                            letra = match.group(1) if match else chr(ord('A') + len(mesas))
-                            mesas.append(Mesa(players, nome=f"Mesa {letra}", numero=len(mesas)+1))
+            for row in tabela:
+                col_a = str(row[0]).strip() if len(row) > 0 and row[0] is not None else ''
+                col_b = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ''
+
+                # Detecta início de uma nova mesa (ex: 'Semifinal - Mesa 1', 'Mesa A', 'Final')
+                is_header = False
+                nome_mesa = ""
+                if fase == 'Final' and 'final' in col_a.lower():
+                    is_header = True
+                    nome_mesa = 'Final'
+                elif fase == 'Semifinais' and ('mesa' in col_a.lower() or 'semifinal' in col_a.lower()):
+                    is_header = True
+                    match = re.search(r'Mesa\s+([A-Za-z0-9]+)', col_a, re.IGNORECASE)
+                    nome_mesa = f'Mesa {match.group(1)}' if match else f'Mesa {chr(ord("A") + len(mesas))}'
+
+                if is_header:
+                    if mesa_atual and players_atual:
+                        m_num = len(mesas) + 1
+                        mesas.append(Mesa(players_atual, nome=mesa_atual, numero=m_num))
+                    mesa_atual = nome_mesa
+                    players_atual = []
+                    continue
+
+                # Coleta jogador se a coluna A for 1, 2, 3 ou 4 e coluna B for um jogador válido
+                if mesa_atual and col_a in ('1', '2', '3', '4'):
+                    if col_b and col_b != '-' and col_b.lower() != 'jogador':
+                        players_atual.append(col_b)
+                        if len(players_atual) == 4:
+                            m_num = len(mesas) + 1
+                            mesas.append(Mesa(players_atual, nome=mesa_atual, numero=m_num))
+                            mesa_atual = None
+                            players_atual = []
+
+            if mesa_atual and players_atual:
+                m_num = len(mesas) + 1
+                mesas.append(Mesa(players_atual, nome=mesa_atual, numero=m_num))
 
             return mesas
 
